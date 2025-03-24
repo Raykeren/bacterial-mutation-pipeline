@@ -1,0 +1,94 @@
+nextflow_pipeline {
+
+    name "Test Bacterial Mutation Pipeline"
+    script "main.nf"
+
+    test("Should run full pipeline with all variant callers") {
+        when {
+            params {
+                input = "test_data/samples.csv"
+                genome = "test_data/reference.fasta"
+                outdir = "results"
+                variant_callers = ['bcftools', 'freebayes', 'varscan2', 'gatk']
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.trace.tasks().size() > 0
+            
+            // Check output directories exist
+            assert path("results").exists()
+            
+            // Test FastQC output
+            assert path("results/*/fastqc/*_fastqc.html").list().size() > 0
+            
+            // Test Fastp output
+            assert path("results/*/trimmed/*_trimmed_1.fastq.gz").list().size() > 0
+            
+            // Test BWA alignment
+            assert path("results/*/alignment/*.bam").list().size() > 0
+            
+            // Test variant caller outputs
+            assert path("results/*/variants/bcftools/*.vcf.gz").list().size() > 0
+            assert path("results/*/variants/freebayes/*.vcf.gz").list().size() > 0
+            assert path("results/*/variants/varscan2/*.vcf.gz").list().size() > 0
+            assert path("results/*/variants/gatk/*.vcf.gz").list().size() > 0
+            
+            // Test annotation output
+            assert path("results/*/annotated/*_annotated.vcf").list().size() > 0
+        }
+    }
+
+    test("Should run pipeline with only BCFtools caller") {
+        when {
+            params {
+                input = "test_data/samples.csv"
+                genome = "test_data/reference.fasta"
+                outdir = "results_bcftools"
+                variant_callers = ['bcftools']
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.trace.tasks().size() > 0
+            
+            // Check BCFtools output exists
+            assert path("results_bcftools/*/variants/bcftools/*.vcf.gz").list().size() > 0
+            
+            // Verify other caller outputs don't exist
+            assert !path("results_bcftools/*/variants/freebayes").exists()
+            assert !path("results_bcftools/*/variants/varscan2").exists()
+            assert !path("results_bcftools/*/variants/gatk").exists()
+        }
+    }
+
+    test("Should fail with invalid input CSV") {
+        when {
+            params {
+                input = "test_data/invalid.csv"
+                genome = "test_data/reference.fasta"
+                outdir = "results_invalid"
+            }
+        }
+
+        then {
+            assert workflow.failed
+        }
+    }
+
+    test("Should fail with missing reference genome") {
+        when {
+            params {
+                input = "test_data/samples.csv"
+                genome = "test_data/missing.fasta"
+                outdir = "results_missing_ref"
+            }
+        }
+
+        then {
+            assert workflow.failed
+        }
+    }
+}
